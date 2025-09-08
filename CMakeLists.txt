@@ -15,6 +15,12 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 23)
 
+set(ENABLE_TESTS OFF)
+
+if (BUILD_TESTS)
+  set(ENABLE_TESTS ON)
+endif()
+
 include(FetchContent)
 
 FetchContent_Declare(
@@ -23,13 +29,14 @@ FetchContent_Declare(
   GIT_TAG        40626af88bd7df9a5fb80be7b25ac85b122d6c21) # 11.2.0
 FetchContent_MakeAvailable(fmt)
 
-add_library(eris INTERFACE)
-target_precompile_headers(eris INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include/base.hh)
-target_include_directories(eris INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(eris INTERFACE fmt)
-target_link_options(eris INTERFACE $<$<CONFIG:Debug>:-fsanitize=address>)
+file(GLOB_RECURSE ENGINE_SRC ${CMAKE_CURRENT_SOURCE_DIR}/lib/engine/*.cc)
+add_library(eris ${ENGINE_SRC})
+target_precompile_headers(eris PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include/base.hh)
+target_include_directories(eris PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(eris PUBLIC fmt)
+target_link_options(eris PUBLIC $<$<CONFIG:Debug>:-fsanitize=address>)
 
-target_compile_options(eris INTERFACE
+target_compile_options(eris PUBLIC
   -march=native
   -ggdb3
   -Wundef
@@ -58,7 +65,7 @@ target_compile_options(eris INTERFACE
 )
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-  target_compile_options(eris INTERFACE
+  target_compile_options(eris PUBLIC
     -Wlogical-op
     -Werror=invalid-memory-model
     -Werror=maybe-uninitialized
@@ -68,13 +75,13 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-  target_compile_options(eris INTERFACE
+  target_compile_options(eris PUBLIC
     -Werror=dangling
     -Werror=return-stack-address
   )
 endif()
 
-add_executable(tei ${CMAKE_CURRENT_SOURCE_DIR}/lib/main.cc)
+add_executable(tei ${CMAKE_CURRENT_SOURCE_DIR}/lib/tei/main.cc)
 target_link_libraries(tei eris)
 
 FetchContent_Declare(
@@ -86,12 +93,13 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
-enable_testing()
+if (ENABLE_TESTS)
+  enable_testing()
+  include(GoogleTest)
 
-file(GLOB_RECURSE TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cc)
+  file(GLOB_RECURSE TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cc)
+  add_executable(tests ${TEST_SRC})
+  target_link_libraries(tests eris GTest::gtest)
 
-add_executable(tests ${TEST_SRC})
-target_link_libraries(tests eris GTest::gtest_main)
-
-include(GoogleTest)
-gtest_discover_tests(tests)
+  gtest_discover_tests(tests)
+endif()

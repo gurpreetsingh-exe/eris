@@ -65,12 +65,6 @@
     }                                                                          \
   }
 
-#define TIME(name, ...)                                                        \
-  do {                                                                         \
-    auto timer##__COUNTER__ = ::eris::Timer(name);                             \
-    __VA_ARGS__                                                                \
-  } while (0)
-
 namespace eris {
 
 namespace rng = std::ranges;
@@ -90,30 +84,40 @@ using f32 = float;
 using f64 = double;
 using Location = std::experimental::source_location;
 
-class Timer {
+class duration {
 public:
-  Timer(std::string name)
-      : _name(name), _start(chr::high_resolution_clock::now()) {}
-  ~Timer() {
-    auto end = chr::high_resolution_clock::now();
-    auto duration_ns = chr::duration_cast<chr::nanoseconds>(end - _start);
-    auto duration_µs = duration_ns / 1000.0f;
-    auto duration_ms = duration_ns / 1000000.0f;
-    fmt::println("{}: {} ns, {:.2f} µs, {:.3f} ms", _name, duration_ns.count(),
-                 duration_µs.count(), duration_ms.count());
-  }
+  duration(f32 d) : _duration_ns(d) {}
+
+  auto nanos() const -> f32 { return _duration_ns; }
+  auto micros() const -> f32 { return _duration_ns / 1000.0f; }
+  auto millis() const -> f32 { return _duration_ns / 1000000.0f; }
+  auto secs() const -> f32 { return _duration_ns / 1000000000.0f; }
 
 private:
-  std::string _name;
-  chr::time_point<chr::high_resolution_clock> _start;
+  f32 _duration_ns;
 };
+
+template <typename A, typename B>
+struct pair {
+  A _a;
+  B _b;
+};
+
+template <typename T, typename Callable>
+auto timeit(Callable cb) -> pair<duration, T> {
+  using hrc = chr::high_resolution_clock;
+  auto start = hrc::now();
+  T r = cb();
+  auto end = hrc::now();
+  return { chr::duration_cast<chr::nanoseconds>(end - start).count(), r };
+}
 
 auto print_backtrace(int /* skip_value */ = 0) -> void;
 
 template <typename... T>
 auto __panic(Location loc, fmt::format_string<T...> fmt, T&&... args) {
   fmt::print(stderr, "panic at {}:{}", loc.file_name(), loc.line());
-  fmt::println(stderr, fmt, args...);
+  fmt::println(stderr, fmt, std::forward<T>(args)...);
   fmt::println(stderr, "BACKTRACE:");
   print_backtrace(2);
   exit(1);

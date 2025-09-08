@@ -5,10 +5,9 @@
 
 using namespace eris;
 
-auto main() -> int {
+auto main(int argc, char** argv) -> int {
   init_engine();
 
-  auto board = Board<3>();
+  auto board = Board<5>();
   board.print();
-  TIME("Perft", { fmt::println("Total Nodes: {}", perft<3>(board, 5)); });
 }

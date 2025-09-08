@@ -5,12 +5,9 @@
 namespace eris {
 
 auto init_engine() -> void {
-  init_orthogonally_adjacent_squares<3>();
-  init_orthogonally_adjacent_squares<4>();
-  init_orthogonally_adjacent_squares<5>();
-  init_orthogonally_adjacent_squares<6>();
-  init_orthogonally_adjacent_squares<7>();
-  init_orthogonally_adjacent_squares<8>();
+#define X(_S) init_square_cache<_S>();
+  BOARD_SIZE_ITER
+#undef X
 }
 
 } // namespace eris

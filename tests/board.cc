@@ -114,25 +114,25 @@ TEST(Board, Stack5x5) {
   board.put_stone(B_FLAT, square);
   EXPECT_EQ(board.top(square), B_FLAT);
 
-  EXPECT_EQ(board.stack_height(square), 4);
-  EXPECT_EQ(board.stack(square), 0b1101);
+  EXPECT_EQ(board.stack(square).height(), 4);
+  EXPECT_EQ(*board.stack(square), 0b1101);
 
   EXPECT_EQ(board.take_stone(square), B_FLAT);
 
-  EXPECT_EQ(board.stack_height(square), 3);
-  EXPECT_EQ(board.stack(square), 0b110);
+  EXPECT_EQ(board.stack(square).height(), 3);
+  EXPECT_EQ(*board.stack(square), 0b110);
 
   EXPECT_EQ(board.take_stone(square), W_FLAT);
   EXPECT_EQ(board.take_stone(square), B_FLAT);
   EXPECT_EQ(board.take_stone(square), W_FLAT);
 
-  EXPECT_EQ(board.stack_height(square), 0);
-  EXPECT_EQ(board.stack(square), 0);
+  EXPECT_EQ(board.stack(square).height(), 0);
+  EXPECT_EQ(*board.stack(square), 0);
 
   EXPECT_EQ(board.take_stone(square), W_FLAT);
 
-  EXPECT_EQ(board.stack_height(square), 0);
-  EXPECT_EQ(board.stack(square), 0);
+  EXPECT_EQ(board.stack(square).height(), 0);
+  EXPECT_EQ(*board.stack(square), 0);
 
   EXPECT_EQ(board.take_stone(square), NO_STONE);
 }
@@ -158,9 +158,31 @@ TEST(Board, RandomPosition) {
 
 TEST(Board, Moves) {
   auto board = Board<5>();
-  auto move = Move<5>(PLACE, W_FLAT, Square<5>("a1"));
+  auto move = Move<5>::place(Square<5>("a1"), FLAT);
   board.make_move(move);
   board.unmake_move(move);
   EXPECT_EQ(board.stones(), 0ULL);
   EXPECT_EQ(board.stones<W_FLAT>(), 0ULL);
+}
+
+TEST(Board, SetupGameFromMoves) {
+  auto board = Board<5>();
+  std::vector<const char*> moves = { "a1",   "a3",  "a2",  "b1",
+                                     "c1",   "b1<", "a3-", "b1",
+                                     "2a2-", "b1<", "c1<", "5a1>122" };
+  for (auto move : moves) { board.make_move(Move<5>(move)); }
+  EXPECT_EQ(board.stones<BLACK>(), 0b1010);
+  EXPECT_EQ(board.stones<WHITE>(), 0b0100);
+
+  EXPECT_EQ(board.stones<W_FLAT>(), 0b0100);
+  EXPECT_EQ(board.stones<B_FLAT>(), 0b1010);
+  auto s1 = board.stack(Square<5>("b1"));
+  EXPECT_EQ(s1.height(), 1);
+  EXPECT_EQ(*s1, 0b1);
+  auto s2 = board.stack(Square<5>("c1"));
+  EXPECT_EQ(s2.height(), 1);
+  EXPECT_EQ(*s2, 0b0);
+  auto s3 = board.stack(Square<5>("d1"));
+  EXPECT_EQ(s3.height(), 1);
+  EXPECT_EQ(*s3, 0b1);
 }

@@ -4,7 +4,7 @@ namespace eris {
 
 inline auto nbitmask(int n) -> u64 {
   ASSERT(n >= 0 and n <= 64);
-  return (1ULL << n) - 1;
+  return ~0ULL >> (64 - n);
 }
 
 inline auto lsb(u64 n) -> int {

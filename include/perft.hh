@@ -2,7 +2,7 @@
 
 #include "board.hh"
 
-// #define BULK_COUNTING
+#define BULK_COUNTING
 
 namespace eris {
 
@@ -23,9 +23,11 @@ auto perft(Board<S>& board, int depth) -> usize {
 #endif
 
   for (const auto move : moves) {
+    auto tmp = board;
     board.make_move(move);
     nodes += perft(board, depth - 1);
-    board.unmake_move(move);
+    board = tmp;
+    // board.unmake_move(move);
   }
   return nodes;
 }
@@ -47,6 +49,14 @@ auto perft_driver(Board<S>& board, int depth) -> usize {
   }
 
   return nodes;
+}
+
+template <int S>
+auto perft(int depth) -> void {
+  auto board = Board<S>();
+  auto [duration, nodes] = timeit<int>([&] { return perft<S>(board, depth); });
+  fmt::println("{}: depth {}, {:.3f} ms, {:.1f} Mnps", nodes, depth,
+               duration.millis(), f32(nodes) / duration.micros());
 }
 
 } // namespace eris

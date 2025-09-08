@@ -2,6 +2,14 @@
 
 namespace eris {
 
+#define BOARD_SIZE_ITER                                                        \
+  X(3)                                                                         \
+  X(4)                                                                         \
+  X(5)                                                                         \
+  X(6)                                                                         \
+  X(7)                                                                         \
+  X(8)
+
 constexpr u64 EMPTY = 0ULL;
 
 /// STONE TYPES

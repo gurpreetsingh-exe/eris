@@ -28,7 +28,7 @@ public:
   constexpr Bitboard(u64 bits) : _bits(bits) {}
   constexpr auto operator*() const -> u64 { return _bits; }
   constexpr auto get(int index) const -> bool {
-    ASSERT(index >= 0 and index < 64);
+    ASSERT(index >= 0 and index < 64, "`{}`", index);
     return _bits & (1ULL << index);
   }
 

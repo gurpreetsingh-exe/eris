@@ -40,6 +40,15 @@ public:
     return n >= 0 and n < Size;
   }
 
+  constexpr auto move_in(Direction direction, int n = 1) const -> Square<Size> {
+    constexpr int offset[] = { Size, 1, -Size, -1 };
+    ASSERT(direction == NORTH   ? rank() < Size - 1
+           : direction == SOUTH ? rank() > 0
+           : direction == EAST  ? file() < Size - 1
+                                : file() > 0);
+    return Square<Size>(_idx + u8(offset[direction] * n));
+  }
+
   constexpr auto operator+=(Direction direction) -> void {
     constexpr int offset[] = { Size, 1, -Size, -1 };
     ASSERT(direction == NORTH   ? rank() < Size - 1
@@ -65,9 +74,6 @@ private:
 
 } // namespace eris
 
-FMT(eris::Square<3>, "{}", v.to_string());
-FMT(eris::Square<4>, "{}", v.to_string());
-FMT(eris::Square<5>, "{}", v.to_string());
-FMT(eris::Square<6>, "{}", v.to_string());
-FMT(eris::Square<7>, "{}", v.to_string());
-FMT(eris::Square<8>, "{}", v.to_string());
+#define X(_S) FMT(eris::Square<_S>, "{}", v.to_string());
+BOARD_SIZE_ITER
+#undef X

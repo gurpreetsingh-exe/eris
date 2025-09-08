@@ -1,31 +1,30 @@
 #pragma once
 
 #include "bitboard.hh"
+#include "square.hh"
 
 namespace eris {
 
-inline u8 orthogonally_adjacent_squares3x3[9] = {};
-inline u8 orthogonally_adjacent_squares4x4[16] = {};
-inline u8 orthogonally_adjacent_squares5x5[25] = {};
-inline u8 orthogonally_adjacent_squares6x6[36] = {};
-inline u8 orthogonally_adjacent_squares7x7[49] = {};
-inline u8 orthogonally_adjacent_squares8x8[64] = {};
+template <int S>
+struct SquareCache {
+  Square<S> adjacent[4] = {};
+  u8 direction_bits = {};
+};
+
+#define SQUARE_CACHE(_S) square_cache##_S
+
+#define X(_S) inline SquareCache<_S> SQUARE_CACHE(_S)[_S * _S] = {};
+BOARD_SIZE_ITER
+#undef X
 
 template <int S>
 constexpr auto orthogonally_adjacent_squares(int i) -> u8 {
-  if constexpr (S == 3) {
-    return orthogonally_adjacent_squares3x3[i];
-  } else if constexpr (S == 4) {
-    return orthogonally_adjacent_squares4x4[i];
-  } else if constexpr (S == 5) {
-    return orthogonally_adjacent_squares5x5[i];
-  } else if constexpr (S == 6) {
-    return orthogonally_adjacent_squares6x6[i];
-  } else if constexpr (S == 7) {
-    return orthogonally_adjacent_squares7x7[i];
-  } else if constexpr (S == 8) {
-    return orthogonally_adjacent_squares8x8[i];
+#define X(_S)                                                                  \
+  if constexpr (_S == S) {                                                     \
+    return SQUARE_CACHE(_S)[i].direction_bits;                                 \
   }
+  BOARD_SIZE_ITER
+#undef X
 
   auto s = S;
   ASSERT(false, "unexpected board size `{}`", s);
@@ -37,38 +36,48 @@ constexpr auto orthogonally_adjacent_squares(Square<S> square) -> u8 {
 }
 
 template <int S>
-auto init_orthogonally_adjacent_squares() -> void {
-  u8* arr = nullptr;
-  if constexpr (S == 3) {
-    arr = orthogonally_adjacent_squares3x3;
-  } else if constexpr (S == 4) {
-    arr = orthogonally_adjacent_squares4x4;
-  } else if constexpr (S == 5) {
-    arr = orthogonally_adjacent_squares5x5;
-  } else if constexpr (S == 6) {
-    arr = orthogonally_adjacent_squares6x6;
-  } else if constexpr (S == 7) {
-    arr = orthogonally_adjacent_squares7x7;
-  } else if constexpr (S == 8) {
-    arr = orthogonally_adjacent_squares8x8;
+auto find_in_direction(Square<S> square, Direction direction) -> Square<S> {
+#define X(_S)                                                                  \
+  if constexpr (_S == S) {                                                     \
+    return SQUARE_CACHE(_S)[*square].adjacent[direction];                      \
   }
+  BOARD_SIZE_ITER
+#undef X
+}
+
+template <int S>
+auto init_square_cache() -> void {
+  SquareCache<S>* arr = nullptr;
+#define X(_S)                                                                  \
+  if constexpr (_S == S) {                                                     \
+    arr = SQUARE_CACHE(_S);                                                    \
+  }
+  BOARD_SIZE_ITER
+#undef X
 
   for (const auto square : iter<S>(nbitmask(S * S))) {
     u8 bits = 0;
+    auto& square_cache_entry = arr[*square];
+    for (int i = 0; i < 4; ++i) { square_cache_entry.adjacent[i] = square; }
+
     if (square.rank() != 0) {
-      bits |= 0b0100;
+      bits |= 1 << SOUTH;
+      square_cache_entry.adjacent[SOUTH] = square + SOUTH;
     }
     if (square.rank() != S - 1) {
-      bits |= 0b0001;
+      bits |= 1 << NORTH;
+      square_cache_entry.adjacent[NORTH] = square + NORTH;
     }
     if (square.file() != 0) {
-      bits |= 0b1000;
+      bits |= 1 << WEST;
+      square_cache_entry.adjacent[WEST] = square + WEST;
     }
     if (square.file() != S - 1) {
-      bits |= 0b0010;
+      bits |= 1 << EAST;
+      square_cache_entry.adjacent[EAST] = square + EAST;
     }
 
-    arr[*square] = bits;
+    square_cache_entry.direction_bits = bits;
   }
 }
 

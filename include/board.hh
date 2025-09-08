@@ -2,10 +2,14 @@
 
 #include "bitboard.hh"
 #include "move.hh"
+#include "stack.hh"
 #include "tables.hh"
 #include "types.hh"
 
 namespace eris {
+
+static constexpr u8 starting_stones[] = { 10, 15, 21, 30, 40, 50 };
+static constexpr u8 starting_caps[] = { 0, 0, 1, 1, 2, 2 };
 
 template <int Size>
 class Board {
@@ -23,16 +27,13 @@ public:
   auto top(Square<Size> sq) const -> Stone { return _top[*sq]; }
   auto top(usize idx) const -> Stone { return _top[idx]; }
 
-  auto stack() const -> const u64* { return _stack; }
-  auto stack(Square<Size> sq) const -> u64 { return _stack[*sq]; }
-  auto stack(usize idx) const -> u64 { return _stack[idx]; }
-
-  auto stack_height() const -> const u8* { return _stack_height; }
-  auto stack_height(Square<Size> sq) const -> u8 { return _stack_height[*sq]; }
-  auto stack_height(usize idx) const -> u8 { return _stack_height[idx]; }
+  auto stack() const -> const Stack* { return _stack; }
+  auto stack(Square<Size> sq) const -> Stack { return _stack[*sq]; }
+  auto stack(usize idx) const -> Stack { return _stack[idx]; }
 
   static constexpr auto size() -> usize { return Size; }
   auto movecount() const -> int { return _movecount; }
+  auto first_move() const -> bool { return _movecount == 0 or _movecount == 1; }
 
   template <StoneType St, Color C>
   constexpr auto stones() const -> Bitboard {
@@ -82,9 +83,7 @@ public:
 
     auto sty = stone_type(_top[idx]);
     ASSERT(sty == FLAT, "`{}` found at \"{}\"", sty, sq);
-    _stack[idx] <<= 1;
-    _stack[idx] |= stone_color(_top[idx]);
-    _stack_height[idx] += 1;
+    _stack[idx].push(stone_color(_top[idx]));
     _replace_stone_at_top(st, sq);
   }
 
@@ -95,15 +94,12 @@ public:
     }
 
     auto st = _top[idx];
-    if (not _stack_height[idx]) {
+    if (not _stack[idx].height()) {
       _replace_stone_at_top(NO_STONE, sq);
       return st;
     }
 
-    auto new_top_stone = mk_stone(FLAT, Color(_stack[idx] & 1));
-
-    _stack[idx] >>= 1;
-    _stack_height[idx] -= 1;
+    auto new_top_stone = mk_stone(FLAT, _stack[idx].pop());
     _replace_stone_at_top(new_top_stone, sq);
     return st;
   }
@@ -111,14 +107,48 @@ public:
   auto make_move(Move<Size> move) -> void {
     auto square = move.square();
     ASSERT(square.ok());
-    if (move.type() == PLACE) {
-      auto stone = move.stone();
+    if (move.is_place()) {
+      auto stone = mk_stone(move.stone(), first_move() ? ~_turn : _turn);
       ASSERT(_top[*square] == NO_STONE);
       put_stone(stone, square);
     } else {
+      auto origin = square;
       auto direction = move.direction();
-      auto taken = take_stone(square);
-      put_stone(taken, square + direction);
+      auto spread = move.spread_pattern();
+
+      auto move_to_stack = [&](Square<Size> sq) {
+        if (auto top = _top[*sq]) {
+          auto ty = stone_type(top);
+          ASSERT(ty != CAP and ty != WALL);
+          _replace_stone_at_top(NO_STONE, *sq);
+          _stack[*sq].push(stone_color(top));
+        }
+      };
+
+      auto held = 0;
+      spread.next(held);
+
+      int to_take;
+      auto held_stack = _stack[*square].take(held - 1);
+
+      while (spread.next(to_take)) {
+        auto next = find_in_direction(square, direction);
+        ASSERT(next != square, "dropping on same square at `{}`", square);
+        auto to_drop = held - to_take;
+        auto t = held_stack.take_back(to_drop);
+        move_to_stack(next);
+        _stack[*next].push(t);
+        _replace_stone_at_top(mk_stone(FLAT, _stack[*next].pop()), *next);
+
+        square = next;
+        held -= to_drop;
+      }
+
+      auto taken = take_stone(origin);
+      square = find_in_direction(square, direction);
+      move_to_stack(square);
+      _stack[*square].push(held_stack);
+      put_stone(taken, square);
     }
 
     _turn = ~_turn;
@@ -128,13 +158,17 @@ public:
   auto unmake_move(Move<Size> move) -> void {
     auto square = move.square();
     ASSERT(square.ok());
-    if (move.type() == PLACE) {
-      auto stone = move.stone();
+    if (move.is_place()) {
+      auto stone = mk_stone(
+          move.stone(), _movecount == 1 or _movecount == 2 ? _turn : ~_turn);
       auto taken = take_stone(square);
       ASSERT(taken == stone, "`{}` != `{}`", taken, stone);
     } else {
       auto direction = move.direction();
+      auto spread = move.spread_pattern();
       auto taken = take_stone(square + direction);
+      auto end_square = square.move_in(direction, spread.size());
+      fmt::println("{}", end_square);
       put_stone(taken, square);
     }
 
@@ -142,37 +176,92 @@ public:
     _movecount -= 1;
   }
 
+  template <Color C, StoneType St>
+  constexpr auto generate_spread_moves(Square<Size> origin, Square<Size> square,
+                                       Direction direction, int carried,
+                                       Spread<Size> partial,
+                                       std::vector<Spread<Size>>& spread) const
+      -> void {
+    auto to = find_in_direction(square, direction);
+    if (to == square) {
+      return;
+    }
+
+    auto to_stone = _top[*to];
+    if constexpr (St == CAP) {
+      generate_spread_moves_impl<C, St>(origin, square, direction, carried,
+                                        partial, spread);
+      return;
+    }
+
+    if (to_stone and stone_type(to_stone) == WALL) {
+      return;
+    }
+
+    generate_spread_moves_impl<C, St>(origin, square, direction, carried,
+                                      partial, spread);
+  }
+
+  template <Color C, StoneType St>
+  constexpr auto
+  generate_spread_moves_impl(Square<Size> origin, Square<Size> square,
+                             Direction direction, int carried,
+                             Spread<Size> partial,
+                             std::vector<Spread<Size>>& spread) const -> void {
+    auto held = square == origin ? Size : carried;
+    auto max_stones_to_take = square == origin ? std::min(carried, Size)
+                                               : std::min(carried - 1, Size);
+
+    for (int to_take = 1; to_take <= max_stones_to_take; ++to_take) {
+      auto new_spread = partial;
+      new_spread.push(to_take, held);
+      generate_spread_moves<C, St>(origin, square + direction, direction,
+                                   to_take, new_spread, spread);
+      new_spread.push(0, to_take);
+      spread.push_back(new_spread);
+    }
+  }
+
   template <Color C>
   constexpr auto generate_moves(std::vector<Move<Size>>& moves) const -> void {
     for (const auto square : iter<Size>(~stones())) {
-      moves.push_back(Move(PLACE, mk_stone<FLAT, C>(), square));
-      moves.push_back(Move(PLACE, mk_stone<WALL, C>(), square));
+      // TODO: check stones left in hand
+      moves.push_back(Move<Size>::place(square, FLAT));
+      moves.push_back(Move<Size>::place(square, WALL));
       if constexpr (Size >= 5) {
-        moves.push_back(Move(PLACE, mk_stone<CAP, C>(), square));
+        moves.push_back(Move<Size>::place(square, CAP));
       }
     }
 
     for (const auto square : iter<Size>(stones<C>())) {
       auto stone = _top[*square];
+      ASSERT(stone != NO_STONE);
       auto available_squares = ~stones() | stones<FLAT>();
+      auto height = _stack[*square].height() + 1;
       for (const auto dir :
            IterateBits(orthogonally_adjacent_squares<Size>(square))) {
+        auto spread = std::vector<Spread<Size>>();
         auto direction = Direction(dir);
-        auto to = square + direction;
-        auto to_stone = _top[*to];
-        if (to_stone == NO_STONE or stone_type(to_stone) == FLAT) {
-          moves.push_back(Move(MOVE, stone, square, direction));
+        if (stone_type(stone) == CAP) {
+          generate_spread_moves<C, CAP>(square, square, direction, height, {},
+                                        spread);
+        } else {
+          generate_spread_moves<C, FLAT>(square, square, direction, height, {},
+                                         spread);
+        }
+
+        for (auto mv : spread) {
+          moves.push_back(Move<Size>::spread(square, direction, mv));
         }
       }
     }
   }
 
   constexpr auto generate_moves(std::vector<Move<Size>>& moves) const -> void {
-    if (_movecount == 0 or _movecount == 1) {
+    if (first_move()) {
       const auto empty = ~stones();
       for (auto square : iter<Size>(empty)) {
-        auto stone = mk_stone(FLAT, _turn);
-        moves.push_back(Move(PLACE, stone, square));
+        moves.push_back(Move<Size>::place(square, FLAT));
       }
       return;
     }
@@ -210,7 +299,7 @@ public:
 
     int max_height = 0;
     for (int i = 0; i < Size * Size; ++i) {
-      auto height = _stack_height[i];
+      auto height = _stack[i].height();
       max_height = height > max_height ? height : max_height;
     }
 
@@ -227,10 +316,10 @@ public:
     fmt::print("{}\n", chars.topright);
 
     for (int i = 0; i < Size * Size; ++i) {
-      if (auto height = _stack_height[i]) {
+      if (auto height = _stack[i].height()) {
         fmt::print(" {} {} {}", chars.hbar, Square<Size>(i), chars.hbar);
         for (int j = height - 1; j >= 0; --j) {
-          auto b = Bitboard(_stack[i]);
+          auto b = Bitboard(*_stack[i]);
           fmt::print(" {}", b.get(j) ? chars.onebit : chars.zerobit);
         }
         for (int j = 0; j < max_height - height; ++j) { fmt::print("  "); }
@@ -253,13 +342,12 @@ public:
     std::memset(_stones, 0, sizeof(_stones));
     std::memset(_top, 0, sizeof(_top));
     std::memset(_stack, 0, sizeof(_stack));
-    std::memset(_stack_height, 0, sizeof(_stack_height));
 
-    _nstones[0] = 0;
-    _nstones[1] = 0;
+    _nstones[0] = starting_stones[Size - 3];
+    _nstones[1] = starting_stones[Size - 3];
 
-    _ncaps[0] = 0;
-    _ncaps[1] = 0;
+    _ncaps[0] = starting_caps[Size - 3];
+    _ncaps[1] = starting_caps[Size - 3];
 
     _turn = WHITE;
     _movecount = 0;
@@ -349,14 +437,16 @@ private:
   Bitboard _stones[STONE_TYPE_NB] = {};
 
   Stone _top[usize(Size * Size)] = {};
-  u64 _stack[usize(Size * Size)] = {};
-  u8 _stack_height[usize(Size * Size)] = {};
+  Stack _stack[usize(Size * Size)] = {};
 
-  u8 _nstones[COLOR_NB] = { 21, 21 };
-  u8 _ncaps[COLOR_NB] = { 1, 1 };
+  u8 _nstones[COLOR_NB] = { starting_stones[Size - 3],
+                            starting_stones[Size - 3] };
+  u8 _ncaps[COLOR_NB] = { starting_caps[Size - 3], starting_caps[Size - 3] };
 
   Color _turn = WHITE;
   int _movecount = 0;
 };
 
 } // namespace eris
+
+FMT(eris::Stack, "{}", v.to_string());
