@@ -12,6 +12,10 @@ auto perft(Board<S>& board, int depth) -> usize {
     return 1;
   }
 
+  if (board.road()) {
+    return 0;
+  }
+
   usize nodes = 0;
   auto moves = std::vector<Move<S>>();
   board.generate_moves(moves);
@@ -40,12 +44,18 @@ auto perft_driver(Board<S>& board, int depth) -> usize {
   auto moves = std::vector<Move<S>>();
   board.generate_moves(moves);
 
+  if (depth == 1) {
+    return moves.size();
+  }
+
   for (const auto move : moves) {
+    auto tmp = board;
     board.make_move(move);
     auto n = perft(board, depth - 1);
     nodes += n;
     fmt::println("{}: {}", move.to_string(), n);
-    board.unmake_move(move);
+    board = tmp;
+    // board.unmake_move(move);
   }
 
   return nodes;

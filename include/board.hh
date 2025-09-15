@@ -74,6 +74,44 @@ public:
     return (... | _colors[c]);
   }
 
+  template <Color C>
+  auto road() -> bool {
+    auto grid = stones<FLAT, C>() | stones<CAP, C>();
+    constexpr auto side = [](auto fn) {
+      auto m = Bitboard();
+      for (int i = 0; i < Size * Size; ++i) {
+        auto square = Square<Size>(i);
+        if (fn(square)) {
+          m |= square;
+        }
+      }
+      return m;
+    };
+
+    constexpr auto BOTTOM = side([](auto s) { return s.rank() == 0; });
+    constexpr auto TOP = side([](auto s) { return s.rank() == Size - 1; });
+    constexpr auto LEFT = side([](auto s) { return s.file() == 0; });
+    constexpr auto RIGHT = side([](auto s) { return s.file() == Size - 1; });
+
+    auto flood = [&](Bitboard start, Bitboard goal) -> bool {
+      auto reach = start & grid;
+      auto old = Bitboard();
+      while (reach != old) {
+        old = reach;
+        auto up = reach << Size;
+        auto down = reach >> Size;
+        auto left = (reach >> 1) & ~RIGHT;
+        auto right = (reach << 1) & ~LEFT;
+        reach |= (up | down | left | right) & grid;
+      }
+      return (reach & goal) != 0;
+    };
+
+    return flood(TOP, BOTTOM) or flood(LEFT, RIGHT);
+  }
+
+  auto road() -> bool { return road<WHITE>() or road<BLACK>(); }
+
   auto put_stone(Stone st, Square<Size> sq) -> void {
     auto idx = *sq;
     if (not _top[idx]) {
@@ -107,10 +145,18 @@ public:
   auto make_move(Move<Size> move) -> void {
     auto square = move.square();
     ASSERT(square.ok());
+    const auto us = first_move() ? ~_turn : _turn;
     if (move.is_place()) {
-      auto stone = mk_stone(move.stone(), first_move() ? ~_turn : _turn);
+      auto stone = mk_stone(move.stone(), us);
       ASSERT(_top[*square] == NO_STONE);
       put_stone(stone, square);
+      if (move.stone() == CAP) {
+        ASSERT(_ncaps[us] > 0);
+        _ncaps[us] -= 1;
+      } else {
+        ASSERT(_nstones[us] > 0);
+        _nstones[us] -= 1;
+      }
     } else {
       auto origin = square;
       auto direction = move.direction();
@@ -119,7 +165,8 @@ public:
       auto move_to_stack = [&](Square<Size> sq) {
         if (auto top = _top[*sq]) {
           auto ty = stone_type(top);
-          ASSERT(ty != CAP and ty != WALL);
+          // TODO: better assert?
+          // ASSERT(ty != CAP and ty != WALL);
           _replace_stone_at_top(NO_STONE, *sq);
           _stack[*sq].push(stone_color(top));
         }
@@ -189,13 +236,13 @@ public:
 
     auto to_stone = _top[*to];
     if constexpr (St == CAP) {
-      generate_spread_moves_impl<C, St>(origin, square, direction, carried,
-                                        partial, spread);
-      return;
-    }
-
-    if (to_stone and stone_type(to_stone) == WALL) {
-      return;
+      if (to_stone and stone_type(to_stone) == CAP) {
+        return;
+      }
+    } else {
+      if (to_stone and stone_type(to_stone) != FLAT) {
+        return;
+      }
     }
 
     generate_spread_moves_impl<C, St>(origin, square, direction, carried,
@@ -212,24 +259,45 @@ public:
     auto max_stones_to_take = square == origin ? std::min(carried, Size)
                                                : std::min(carried - 1, Size);
 
-    for (int to_take = 1; to_take <= max_stones_to_take; ++to_take) {
-      auto new_spread = partial;
-      new_spread.push(to_take, held);
-      generate_spread_moves<C, St>(origin, square + direction, direction,
-                                   to_take, new_spread, spread);
-      new_spread.push(0, to_take);
-      spread.push_back(new_spread);
+    auto generate = [&] {
+      for (int to_take = 1; to_take <= max_stones_to_take; ++to_take) {
+        auto new_spread = partial;
+        new_spread.push(to_take, held);
+        generate_spread_moves<C, St>(origin, square + direction, direction,
+                                     to_take, new_spread, spread);
+        new_spread.push(0, to_take);
+        spread.push_back(new_spread);
+      }
+    };
+
+    if constexpr (St == CAP) {
+      const auto neighbour = _top[*(square + direction)];
+      if (neighbour and stone_type(neighbour) == WALL and
+          max_stones_to_take > 0) {
+        auto new_spread = partial;
+        new_spread.push(1, held);
+        spread.push_back(new_spread);
+      } else {
+        generate();
+      }
+
+      return;
     }
+
+    generate();
   }
 
   template <Color C>
   constexpr auto generate_moves(std::vector<Move<Size>>& moves) const -> void {
     for (const auto square : iter<Size>(~stones())) {
-      // TODO: check stones left in hand
-      moves.push_back(Move<Size>::place(square, FLAT));
-      moves.push_back(Move<Size>::place(square, WALL));
+      if (_nstones[C] > 0) {
+        moves.push_back(Move<Size>::place(square, FLAT));
+        moves.push_back(Move<Size>::place(square, WALL));
+      }
       if constexpr (Size >= 5) {
-        moves.push_back(Move<Size>::place(square, CAP));
+        if (_ncaps[C] > 0) {
+          moves.push_back(Move<Size>::place(square, CAP));
+        }
       }
     }
 
