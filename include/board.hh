@@ -224,11 +224,10 @@ public:
   }
 
   template <Color C, StoneType St>
-  constexpr auto generate_spread_moves(Square<Size> origin, Square<Size> square,
-                                       Direction direction, int carried,
-                                       Spread<Size> partial,
-                                       std::vector<Spread<Size>>& spread) const
-      -> void {
+  constexpr auto
+  generate_spread_moves(Square<Size> origin, Square<Size> square,
+                        Direction direction, int carried, Spread<Size> partial,
+                        ArrayVec<Spread<Size>, 255>& spread) const -> void {
     auto to = find_in_direction(square, direction);
     if (to == square) {
       return;
@@ -254,7 +253,8 @@ public:
   generate_spread_moves_impl(Square<Size> origin, Square<Size> square,
                              Direction direction, int carried,
                              Spread<Size> partial,
-                             std::vector<Spread<Size>>& spread) const -> void {
+                             ArrayVec<Spread<Size>, 255>& spread) const
+      -> void {
     auto held = square == origin ? Size : carried;
     auto max_stones_to_take = square == origin ? std::min(carried, Size)
                                                : std::min(carried - 1, Size);
@@ -288,7 +288,7 @@ public:
   }
 
   template <Color C>
-  constexpr auto generate_moves(std::vector<Move<Size>>& moves) const -> void {
+  constexpr auto generate_moves(MoveList<Size>& moves) const -> void {
     for (const auto square : iter<Size>(~stones())) {
       if (_nstones[C] > 0) {
         moves.push_back(Move<Size>::place(square, FLAT));
@@ -308,7 +308,7 @@ public:
       auto height = _stack[*square].height() + 1;
       for (const auto dir :
            IterateBits(orthogonally_adjacent_squares<Size>(square))) {
-        auto spread = std::vector<Spread<Size>>();
+        auto spread = ArrayVec<Spread<Size>, 255>();
         auto direction = Direction(dir);
         if (stone_type(stone) == CAP) {
           generate_spread_moves<C, CAP>(square, square, direction, height, {},
@@ -325,7 +325,7 @@ public:
     }
   }
 
-  constexpr auto generate_moves(std::vector<Move<Size>>& moves) const -> void {
+  constexpr auto generate_moves(MoveList<Size>& moves) const -> void {
     if (first_move()) {
       const auto empty = ~stones();
       for (auto square : iter<Size>(empty)) {

@@ -190,6 +190,9 @@ private:
   u16 _inner;
 };
 
+template <int S>
+using MoveList = ArrayVec<Move<S>, usize(S * 2 * 4 * 4)>;
+
 } // namespace eris
 
 #define X(_S) FMT(eris::Move<_S>, "{}", v.to_string());

@@ -17,7 +17,7 @@ auto perft(Board<S>& board, int depth) -> usize {
   }
 
   usize nodes = 0;
-  auto moves = std::vector<Move<S>>();
+  auto moves = MoveList<S>();
   board.generate_moves(moves);
 
 #ifdef BULK_COUNTING
@@ -41,7 +41,7 @@ auto perft_driver(Board<S>& board, int depth) -> usize {
   ASSERT(depth >= 1);
 
   usize nodes = 0;
-  auto moves = std::vector<Move<S>>();
+  auto moves = MoveList<S>();
   board.generate_moves(moves);
 
   if (depth == 1) {

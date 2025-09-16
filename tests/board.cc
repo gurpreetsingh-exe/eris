@@ -7,7 +7,7 @@ using namespace eris;
 #define FIRST_MOVE(S, tps)                                                     \
   {                                                                            \
     auto board = ::eris::Board<S>::from(tps);                                  \
-    auto moves = std::vector<::eris::Move<S>>();                               \
+    auto moves = MoveList<S>();                                                \
     board.generate_moves(moves);                                               \
     EXPECT_EQ(moves.size(), S* S);                                             \
   }

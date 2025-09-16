@@ -123,6 +123,24 @@ auto __panic(Location loc, fmt::format_string<T...> fmt, T&&... args) {
   exit(1);
 }
 
+template <typename T, usize N>
+class ArrayVec {
+public:
+  auto operator*() -> T* { return _end; }
+  auto operator[](usize idx) const -> T { return _inner[idx]; }
+  auto begin() const -> const T* { return _inner; }
+  auto end() const -> const T* { return _end; }
+  auto push_back(T v) -> void {
+    ASSERT(size() < N);
+    *_end++ = v;
+  }
+  auto size() const -> usize { return usize(_end - _inner); }
+
+private:
+  T _inner[N];
+  T* _end = _inner;
+};
+
 using Location = std::experimental::source_location;
 
 constexpr bool backtrace_addr2line = true;
