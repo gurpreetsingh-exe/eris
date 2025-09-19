@@ -36,3 +36,36 @@ TEST(Perft, Board5) {
     EXPECT_EQ(perft<5>(board, depth), perf_results[depth]);
   }
 }
+
+TEST(Perft, Board6) {
+  usize perf_results[] = {
+    1, 36, 1260, 132720, 13586048, 1253506520,
+  };
+
+  for (int depth = 0; depth < 6; ++depth) {
+    auto board = Board<6>();
+    EXPECT_EQ(perft<6>(board, depth), perf_results[depth]);
+  }
+}
+
+TEST(Perft, Board7) {
+  usize perf_results[] = {
+    1, 49, 2352, 339696, 48051008, 6813380628,
+  };
+
+  for (int depth = 0; depth < 6; ++depth) {
+    auto board = Board<7>();
+    EXPECT_EQ(perft<7>(board, depth), perf_results[depth]);
+  }
+}
+
+TEST(Perft, Board8) {
+  usize perf_results[] = {
+    1, 64, 4032, 764064, 142512336, 26642455192,
+  };
+
+  for (int depth = 0; depth < 6; ++depth) {
+    auto board = Board<8>();
+    EXPECT_EQ(perft<8>(board, depth), perf_results[depth]);
+  }
+}

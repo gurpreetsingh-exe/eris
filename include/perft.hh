@@ -64,7 +64,8 @@ auto perft_driver(Board<S>& board, int depth) -> usize {
 template <int S>
 auto perft(int depth) -> void {
   auto board = Board<S>();
-  auto [duration, nodes] = timeit<int>([&] { return perft<S>(board, depth); });
+  auto [duration, nodes] =
+      timeit<usize>([&] { return perft<S>(board, depth); });
   fmt::println("{}: depth {}, {:.3f} ms, {:.1f} Mnps", nodes, depth,
                duration.millis(), f32(nodes) / duration.micros());
 }

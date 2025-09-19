@@ -81,8 +81,11 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   )
 endif()
 
-add_executable(tei ${CMAKE_CURRENT_SOURCE_DIR}/lib/tei/main.cc)
-target_link_libraries(tei eris)
+find_package(Threads REQUIRED)
+add_executable(tei
+  ${CMAKE_CURRENT_SOURCE_DIR}/lib/tei/tei.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/lib/tei/main.cc)
+target_link_libraries(tei eris Threads::Threads)
 
 FetchContent_Declare(
   googletest
